@@ -14,7 +14,7 @@ from torch import nn as nn
 from torch import optim as optim
 
 
-def load_data(data_dir, batch_size=20, num_workers=0):
+def load_data(data_dir, batch_size=20, n_workers=0):
     """
     @brief Load train and validation data and apply transformations.
 
@@ -53,10 +53,10 @@ def load_data(data_dir, batch_size=20, num_workers=0):
     # Define the dataloaders
     train_loader = torch.utils.data.DataLoader(train_data,
                                                batch_size=batch_size,
-                                               num_workers=num_workers)
+                                               num_workers=n_workers)
     valid_loader = torch.utils.data.DataLoader(val_data,
                                                batch_size=batch_size,
-                                               num_workers=num_workers)
+                                               num_workers=n_workers)
     return train_loader, valid_loader
 
 
@@ -142,7 +142,7 @@ def train_model(model, train_loader, criterion, optimizer,
     return train_loss
 
 
-def evaluate_model(model, valid_loader, criterion, n_classes,
+def evaluate_model(model, valid_loader, criterion, n_classes=10,
                    train_on_gpu=False):
     """!
     @brief Validate model.
@@ -204,7 +204,7 @@ def parse_arguments():
     args_parser.add_argument('-b', '--batch_size', type=int,
                              default=20,
                              help="Batch size.")
-    args_parser.add_argument('--num_workers', type=int,
+    args_parser.add_argument('--n_workers', type=int,
                              default=0,
                              help="Number of subprocesses to use for "
                                   "data loading.")
@@ -220,7 +220,7 @@ def main():
 
     loader_tr, loader_val = load_data(args.input,
                                       batch_size=args.batch_size,
-                                      num_workers=args.num_workers)
+                                      n_workers=args.n_workers)
     train_on_gpu = check_cuda()
     _, num_classes = get_label_mapping()
 
@@ -237,18 +237,23 @@ def main():
     loss_val_min = np.Inf
 
     # Train model
-    for epoch in range(1, args.n_epochs+1):
+    for epoch in range(args.n_epochs):
 
-        loss_tr = train_model(model, loader_tr, criterion, optimizer,
+        loss_tr = train_model(model,
+                              loader_tr,
+                              criterion,
+                              optimizer,
                               train_on_gpu=train_on_gpu)
-        loss_val, acc_val = evaluate_model(model, loader_val,
-                                           criterion, num_classes,
+        loss_val, acc_val = evaluate_model(model,
+                                           loader_val,
+                                           criterion,
+                                           n_classes=num_classes,
                                            train_on_gpu=train_on_gpu)
         # Print training/validation statistics
         print('Epoch: {} \tTraining Loss: {:.6f}'
               '\tValidation Loss: {:.6f}'
               '\tValidation Accuracy: {:.2f}'
-              .format(epoch,
+              .format(epoch + 1,
                       loss_tr,
                       loss_val,
                       acc_val))
