@@ -1,103 +1,123 @@
+"""!
+@brief Training script for Image Classifier Project.
+
+@author Aggelina Chatziagapi {aggelina.cha@gmail.com}
+"""
+
+import os
+import json
+import argparse
 import numpy as np
 import torch
-import torchvision
 from torchvision import datasets, models, transforms
-import torch.nn as nn
-import torch.optim as optim
-import json
+from torch import nn as nn
+from torch import optim as optim
 
 
-data_dir = 'flower_data'
-train_dir = data_dir + '/train'
-valid_dir = data_dir + '/valid'
+def load_data(data_dir, batch_size=20, num_workers=0):
+    """
+    @brief Load train and validation data and apply transformations.
 
-# Define transforms
-train_transforms = transforms.Compose([
-    transforms.RandomResizedCrop(224),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomVerticalFlip(),
-    transforms.RandomRotation(10),
-    transforms.ToTensor(),
-    transforms.Normalize((0.485, 0.456, 0.406),
-                         (0.229, 0.224, 0.225))])
-val_transforms = transforms.Compose([
-    transforms.Resize(224),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize((0.485, 0.456, 0.406),
-                         (0.229, 0.224, 0.225))])
+    @param batch_size (\a int) How many samples per batch to load.
+    @param num_workers (\a int) Number of subprocesses to use for data
+        loading.
 
-# Load the datasets with ImageFolder
-train_data = datasets.ImageFolder(train_dir, transform=train_transforms)
-val_data = datasets.ImageFolder(valid_dir, transform=val_transforms)
+    @returns \b train_loader DataLoader for train data.
+    @returns \b valid_loader DataLoader for validation data.
+    """
+    train_dir = os.path.join(data_dir, 'train')
+    valid_dir = os.path.join(data_dir, 'valid')
 
-# number of subprocesses to use for data loading
-num_workers = 0
-# how many samples per batch to load
-batch_size = 20
+    # Define transforms
+    train_transforms = transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomVerticalFlip(),
+        transforms.RandomRotation(10),
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406),
+                             (0.229, 0.224, 0.225))])
+    val_transforms = transforms.Compose([
+        transforms.Resize(224),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406),
+                             (0.229, 0.224, 0.225))])
 
-# Define the dataloaders
-train_loader = torch.utils.data.DataLoader(train_data,
-                                           batch_size=batch_size,
-                                           num_workers=num_workers)
-valid_loader = torch.utils.data.DataLoader(val_data,
-                                           batch_size=batch_size,
-                                           num_workers=num_workers)
+    # Load the datasets with ImageFolder
+    train_data = datasets.ImageFolder(train_dir,
+                                      transform=train_transforms)
+    val_data = datasets.ImageFolder(valid_dir,
+                                    transform=val_transforms)
 
-# Label mapping
-with open('cat_to_name.json', 'r') as f:
-    cat_to_name = json.load(f)
-
-n_classes = len(cat_to_name)
-
-# check if CUDA is available
-train_on_gpu = torch.cuda.is_available()
-
-if not train_on_gpu:
-    print('CUDA is not available.  Training on CPU ...')
-else:
-    print('CUDA is available!  Training on GPU ...')
+    # Define the dataloaders
+    train_loader = torch.utils.data.DataLoader(train_data,
+                                               batch_size=batch_size,
+                                               num_workers=num_workers)
+    valid_loader = torch.utils.data.DataLoader(val_data,
+                                               batch_size=batch_size,
+                                               num_workers=num_workers)
+    return train_loader, valid_loader
 
 
-# Build and train your network
-vgg16 = models.vgg16(pretrained=True)
+def get_label_mapping(input_json="cat_to_name.json"):
+    """!
+    @brief Read json file with label mapping (from category label to
+        category name).
+    """
+    with open(input_json, "r") as f:
+        cat_to_name = json.load(f)
 
-# Freeze training for all "features" layers
-for param in vgg16.features.parameters():
-    param.requires_grad = False
+    n_classes = len(cat_to_name)
 
-n_inputs = vgg16.classifier[6].in_features
-last_layer = nn.Linear(n_inputs, n_classes)
-vgg16.classifier[6] = last_layer
+    return cat_to_name, n_classes
 
-# if GPU is available, move the model to GPU
-if train_on_gpu:
-    vgg16.cuda()
 
-print(vgg16)
+def check_cuda():
+    """!
+    @brief Check if CUDA is available.
+    """
+    train_on_gpu = torch.cuda.is_available()
 
-# specify loss function (categorical cross-entropy)
-criterion = nn.CrossEntropyLoss()
+    if not train_on_gpu:
+        print('CUDA is not available.  Training on CPU ...')
+    else:
+        print('CUDA is available!  Training on GPU ...')
 
-# specify optimizer and learning rate = 0.001
-optimizer = optim.SGD(vgg16.classifier.parameters(), lr=0.001)
+    return train_on_gpu
 
-# Train model
 
-# number of epochs to train the model
-n_epochs = 1
-model = vgg16
+def build_model(n_classes, train_on_gpu=False):
+    """!
+    @brief Build network architecture using a pretrained VGG16 model.
+    """
+    vgg16 = models.vgg16(pretrained=True)
 
-valid_loss_min = np.Inf  # track change in validation loss
+    # Freeze training for all "features" layers
+    for param in vgg16.features.parameters():
+        param.requires_grad = False
 
-for epoch in range(1, n_epochs+1):
+    n_inputs = vgg16.classifier[6].in_features
+    last_layer = nn.Linear(n_inputs, n_classes)
+    vgg16.classifier[6] = last_layer
 
-    # keep track of training and validation loss
+    # if GPU is available, move the model to GPU
+    if train_on_gpu:
+        vgg16.cuda()
+
+    print(vgg16)
+
+    return vgg16
+
+
+def train_model(model, train_loader, criterion, optimizer,
+                train_on_gpu=False):
+    """!
+    @brief Train model.
+    """
     train_loss = 0.0
-    valid_loss = 0.0
-
-    # train the model
     model.train()
+
     for batch_idx, (data, target) in enumerate(train_loader):
         # move tensors to GPU if CUDA is available
         if train_on_gpu:
@@ -117,10 +137,21 @@ for epoch in range(1, n_epochs+1):
         # update training loss
         train_loss += loss.item() * data.size(0)
 
-    # validate the model
-    model.eval()
+    train_loss = train_loss / len(train_loader.dataset)
+
+    return train_loss
+
+
+def evaluate_model(model, valid_loader, criterion, n_classes,
+                   train_on_gpu=False):
+    """!
+    @brief Validate model.
+    """
+    valid_loss = 0.0
     class_correct = list(0. for i in range(n_classes))
     class_total = list(0. for i in range(n_classes))
+
+    model.eval()
 
     for batch_idx, (data, target) in enumerate(valid_loader):
         # move tensors to GPU if CUDA is available
@@ -142,30 +173,90 @@ for epoch in range(1, n_epochs+1):
         else:
             correct = np.squeeze(correct_tensor.cpu().numpy())
         # calculate test accuracy for each object class
-        for i in range(batch_size):
+        for i in range(target.size(0)):
             label = target.data[i]
             class_correct[label] += correct[i].item()
             class_total[label] += 1
 
-    # calculate average losses
-    train_loss = train_loss / len(train_loader.dataset)
     valid_loss = valid_loss / len(valid_loader.dataset)
     valid_acc = 100. * np.sum(class_correct) / np.sum(class_total)
 
-    # print training/validation statistics
-    print('Epoch: {} \tTraining Loss: {:.6f} \tValidation Loss: {:.6f}'
-          '\tValidation Accuracy: {:.2f} ({}/{})'
-          .format(epoch,
-                  train_loss,
-                  valid_loss,
-                  valid_acc,
-                  np.sum(class_correct),
-                  np.sum(class_total)))
+    return valid_loss, valid_acc
 
-    # save model if validation loss has decreased
-    if valid_loss <= valid_loss_min:
-        print('Validation loss decreased ({:.6f} --> {:.6f}). '
-              ' Saving model ...'.format(valid_loss_min,
-                                         valid_loss))
-        torch.save(model.state_dict(), 'model.pt')
-        valid_loss_min = valid_loss
+
+def parse_arguments():
+    """!
+    @brief Parse Arguments for training a CNN with multiple datasets
+           and corresponding tasks.
+    """
+    args_parser = argparse.ArgumentParser(description="Image classifier"
+                                                      " training")
+    args_parser.add_argument('-i', '--input', type=str,
+                             required=True,
+                             help="Path of the flower dataset.")
+    args_parser.add_argument('-e', '--n_epochs', type=int,
+                             default=10,
+                             help="Number of epochs to train the "
+                                  "model.")
+    args_parser.add_argument('-b', '--batch_size', type=int,
+                             default=20,
+                             help="Batch size.")
+    args_parser.add_argument('--num_workers', type=int,
+                             default=0,
+                             help="Number of subprocesses to use for "
+                                  "data loading.")
+
+    return args_parser.parse_args()
+
+
+def main():
+    """!
+    @brief Main function for model training and evaluation.
+    """
+    args = parse_arguments()
+
+    loader_tr, loader_val = load_data(args.input,
+                                      batch_size=args.batch_size,
+                                      num_workers=args.num_workers)
+    train_on_gpu = check_cuda()
+    _, num_classes = get_label_mapping()
+
+    # Build model architecture
+    model = build_model(num_classes, train_on_gpu=train_on_gpu)
+
+    # Specify loss function (categorical cross-entropy)
+    criterion = nn.CrossEntropyLoss()
+
+    # Specify optimizer and learning rate = 0.001
+    optimizer = optim.SGD(model.classifier.parameters(), lr=0.001)
+
+    loss_val_min = np.Inf
+
+    # Train model
+    for epoch in range(1, args.n_epochs+1):
+
+        loss_tr = train_model(model, loader_tr, criterion, optimizer,
+                              train_on_gpu=train_on_gpu)
+        loss_val, acc_val = evaluate_model(model, loader_val,
+                                           criterion, num_classes,
+                                           train_on_gpu=train_on_gpu)
+        # Print training/validation statistics
+        print('Epoch: {} \tTraining Loss: {:.6f}'
+              '\tValidation Loss: {:.6f}'
+              '\tValidation Accuracy: {:.2f}'
+              .format(epoch,
+                      loss_tr,
+                      loss_val,
+                      acc_val))
+
+        # Save model if validation loss has decreased
+        if loss_val <= loss_val_min:
+            print('Validation loss decreased ({:.6f} --> {:.6f}). '
+                  'Saving model ...'.format(loss_val_min,
+                                            loss_val))
+            torch.save(model.state_dict(), 'model.pt')
+            loss_val_min = loss_val
+
+
+if __name__ == '__main__':
+    main()
