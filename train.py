@@ -198,6 +198,9 @@ def parse_arguments():
                              default=10,
                              help="Number of epochs to train the "
                                   "model.")
+    args_parser.add_argument('-lr', '--learning_rate', type=float,
+                             default=0.001,
+                             help="Learning rate.")
     args_parser.add_argument('-b', '--batch_size', type=int,
                              default=20,
                              help="Batch size.")
@@ -227,8 +230,9 @@ def main():
     # Specify loss function (categorical cross-entropy)
     criterion = nn.CrossEntropyLoss()
 
-    # Specify optimizer and learning rate = 0.001
-    optimizer = optim.SGD(model.classifier.parameters(), lr=0.001)
+    # Specify optimizer and learning rate
+    optimizer = optim.SGD(model.classifier.parameters(),
+                          lr=args.learning_rate)
 
     loss_val_min = np.Inf
 
