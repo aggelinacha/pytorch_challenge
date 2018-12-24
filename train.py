@@ -208,6 +208,9 @@ def parse_arguments():
                              default=0,
                              help="Number of subprocesses to use for "
                                   "data loading.")
+    args_parser.add_argument('-o', '--output', type=str,
+                             default='model.pt',
+                             help="Path to save the model checkpoint.")
 
     return args_parser.parse_args()
 
@@ -250,7 +253,7 @@ def main():
                                            n_classes=num_classes,
                                            train_on_gpu=train_on_gpu)
         # Print training/validation statistics
-        print('Epoch: {} \tTraining Loss: {:.6f}'
+        print('Epoch: {} \tTraining Loss: {:.6f} '
               '\tValidation Loss: {:.6f}'
               '\tValidation Accuracy: {:.2f}'
               .format(epoch + 1,
@@ -263,7 +266,7 @@ def main():
             print('Validation loss decreased ({:.6f} --> {:.6f}). '
                   'Saving model ...'.format(loss_val_min,
                                             loss_val))
-            torch.save(model.state_dict(), 'model.pt')
+            torch.save(model.state_dict(), args.output)
             loss_val_min = loss_val
 
 
