@@ -1,4 +1,4 @@
-### Short desription
+### Short description
 
 This is a fork from udacity's repo: https://github.com/udacity/pytorch_challenge.git, including the PyTorch Scholarship Challenge final project.
 
@@ -7,7 +7,7 @@ This is a fork from udacity's repo: https://github.com/udacity/pytorch_challenge
 
 ```wget https://s3.amazonaws.com/content.udacity-data.com/courses/nd188/flower_data.zip```
 
-Extract the above zip under pytorch_challenge/ directory.
+Extract the above zip under `pytorch_challenge/` directory.
 
 
 ### Train model
