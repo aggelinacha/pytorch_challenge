@@ -199,6 +199,45 @@ def evaluate_model(model, valid_loader, criterion, n_classes=10,
     return valid_loss, valid_acc
 
 
+def save_checkpoint(outfile, model, optimizer, loss, epoch,
+                    class_to_idx, pretrained="vgg16"):
+    """!
+    @brief Save model checkpoint.
+    """
+    checkpoint = {'model': model.state_dict(),
+                  'optimizer_state': optimizer.state_dict(),
+                  'loss': loss,
+                  'epoch1': epoch,
+                  'class_to_idx': class_to_idx,
+                  'pretrained': pretrained,
+                  'hidden_1': model.classifier[0].out_features,
+                  'hidden_2': model.classifier[3].out_features,
+                  'drop_prob': model.classifier[2].p}
+
+    torch.save(checkpoint, outfile)
+
+
+def load_checkpoint(filepath, train_on_gpu=False):
+    """!
+    @brief Load model checkpoint.
+    """
+    checkpoint = torch.load(filepath)
+    int2label = checkpoint['class_to_idx']
+    num_classes = len(int2label)
+
+    model = build_model_vgg(num_classes,
+                            pretrained=checkpoint['pretrained'],
+                            hidden_1=checkpoint['hidden_1'],
+                            hidden_2=checkpoint['hidden_2'],
+                            drop_prob=checkpoint['drop_prob'],
+                            train_on_gpu=train_on_gpu)
+    model.load_state_dict(checkpoint['model'])
+    if train_on_gpu:
+        model.cuda()
+
+    return model, checkpoint
+
+
 def parse_arguments():
     """!
     @brief Parse Arguments for training a CNN with multiple datasets
@@ -241,6 +280,9 @@ def parse_arguments():
     args_parser.add_argument('-o', '--output', type=str,
                              default='model.pt',
                              help="Path to save the model checkpoint.")
+    args_parser.add_argument('-ckpt', '--checkpoint', type=str,
+                             help="Path to load the model checkpoint if"
+                                  " exists.")
 
     return args_parser.parse_args()
 
@@ -258,26 +300,34 @@ def main():
     cat_to_name = get_label_mapping()
     num_classes = len(cat_to_name)
 
-    # Build model architecture
-    model = build_model_vgg(num_classes,
-                            pretrained=args.pretrained,
-                            hidden_1=args.hidden_1,
-                            hidden_2=args.hidden_2,
-                            drop_prob=args.dropout,
-                            train_on_gpu=train_on_gpu)
-
-    # Specify loss function (categorical cross-entropy)
-    criterion = nn.CrossEntropyLoss()
+    if args.checkpoint:
+        print("Loading model checkpoint...")
+        model, ckpt_dict = load_checkpoint(args.checkpoint,
+                                           train_on_gpu=train_on_gpu)
+        loss_val_min = ckpt_dict['loss']
+        epoch1 = ckpt_dict['epoch'] + 1
+        args.pretrained = ckpt_dict['pretrained']
+    else:
+        epoch1 = 0
+        # Build model architecture
+        model = build_model_vgg(num_classes,
+                                pretrained=args.pretrained,
+                                hidden_1=args.hidden_1,
+                                hidden_2=args.hidden_2,
+                                drop_prob=args.dropout,
+                                train_on_gpu=train_on_gpu)
+        loss_val_min = np.Inf
 
     # Specify optimizer and learning rate
     optimizer = optim.SGD(model.classifier.parameters(),
                           lr=args.learning_rate)
-
-    loss_val_min = np.Inf
+    if args.checkpoint:
+        optimizer.load_state_dict(ckpt_dict['optimizer_state'])
+    # Specify loss function (categorical cross-entropy)
+    criterion = nn.CrossEntropyLoss()
 
     # Train model
-    for epoch in range(args.n_epochs):
-
+    for epoch in range(epoch1, args.n_epochs):
         loss_tr = train_model(model,
                               loader_tr,
                               criterion,
@@ -302,7 +352,9 @@ def main():
             print('Validation loss decreased ({:.6f} --> {:.6f}). '
                   'Saving model ...'.format(loss_val_min,
                                             loss_val))
-            torch.save(model.state_dict(), args.output)
+            save_checkpoint(args.output, model, optimizer, loss_val,
+                            epoch, cat_to_name,
+                            pretrained=args.pretrained)
             loss_val_min = loss_val
 
 
