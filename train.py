@@ -7,6 +7,7 @@
 import os
 import json
 import argparse
+from collections import OrderedDict
 import numpy as np
 import torch
 from torchvision import datasets, models, transforms
@@ -68,9 +69,7 @@ def get_label_mapping(input_json="cat_to_name.json"):
     with open(input_json, "r") as f:
         cat_to_name = json.load(f)
 
-    n_classes = len(cat_to_name)
-
-    return cat_to_name, n_classes
+    return cat_to_name
 
 
 def check_cuda():
@@ -87,27 +86,43 @@ def check_cuda():
     return train_on_gpu
 
 
-def build_model(n_classes, train_on_gpu=False):
+def build_model_vgg(n_classes, pretrained="vgg16", hidden_1=4096,
+                    hidden_2=4096, drop_prob=0.5, train_on_gpu=False):
     """!
-    @brief Build network architecture using a pretrained VGG16 model.
+    @brief Build network architecture using a pretrained VGG model.
     """
-    vgg16 = models.vgg16(pretrained=True)
+    if pretrained == "vgg16":
+        model = models.vgg16(pretrained=True)
+    elif pretrained == "vgg19":
+        model = models.vgg19(pretrained=True)
+    else:
+        raise NotImplementedError("Use of {} as pretrained network for "
+                                  "feature extraction is not "
+                                  "implemented yet".format(pretrained))
 
-    # Freeze training for all "features" layers
-    for param in vgg16.features.parameters():
+    # Freeze training for all features layers
+    for param in model.features.parameters():
         param.requires_grad = False
 
-    n_inputs = vgg16.classifier[6].in_features
-    last_layer = nn.Linear(n_inputs, n_classes)
-    vgg16.classifier[6] = last_layer
+    n_inputs = model.classifier[0].in_features
+    classifier = nn.Sequential(OrderedDict([
+        ('0', nn.Linear(n_inputs, hidden_1)),
+        ('1', nn.ReLU(inplace=True)),
+        ('2', nn.Dropout(drop_prob)),
+        ('3', nn.Linear(hidden_1, hidden_2)),
+        ('4', nn.ReLU(inplace=True)),
+        ('5', nn.Dropout(drop_prob)),
+        ('6', nn.Linear(hidden_2, n_classes))]))
+
+    model.classifier = classifier
 
     # if GPU is available, move the model to GPU
     if train_on_gpu:
-        vgg16.cuda()
+        model.cuda()
 
-    print(vgg16)
+    print(model)
 
-    return vgg16
+    return model
 
 
 def train_model(model, train_loader, criterion, optimizer,
@@ -208,6 +223,21 @@ def parse_arguments():
                              default=0,
                              help="Number of subprocesses to use for "
                                   "data loading.")
+    args_parser.add_argument('--pretrained', type=str,
+                             default="vgg16",
+                             help="Model type to use as a pretrained "
+                                  "network for feature extraction.")
+    args_parser.add_argument('--hidden_1', type=int,
+                             default=4096,
+                             help="Number of hidden units for the "
+                                  "classifier's 1st linear layer.")
+    args_parser.add_argument('--hidden_2', type=int,
+                             default=4096,
+                             help="Number of hidden units for the "
+                                  "classifier's 2nd linear layer.")
+    args_parser.add_argument('--dropout', type=float,
+                             default=0.5,
+                             help="Dropout probability.")
     args_parser.add_argument('-o', '--output', type=str,
                              default='model.pt',
                              help="Path to save the model checkpoint.")
@@ -225,10 +255,16 @@ def main():
                                       batch_size=args.batch_size,
                                       n_workers=args.n_workers)
     train_on_gpu = check_cuda()
-    _, num_classes = get_label_mapping()
+    cat_to_name = get_label_mapping()
+    num_classes = len(cat_to_name)
 
     # Build model architecture
-    model = build_model(num_classes, train_on_gpu=train_on_gpu)
+    model = build_model_vgg(num_classes,
+                            pretrained=args.pretrained,
+                            hidden_1=args.hidden_1,
+                            hidden_2=args.hidden_2,
+                            drop_prob=args.dropout,
+                            train_on_gpu=train_on_gpu)
 
     # Specify loss function (categorical cross-entropy)
     criterion = nn.CrossEntropyLoss()
