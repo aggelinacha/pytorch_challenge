@@ -54,10 +54,12 @@ def load_data(data_dir, batch_size=20, n_workers=0):
     # Define the dataloaders
     train_loader = torch.utils.data.DataLoader(train_data,
                                                batch_size=batch_size,
-                                               num_workers=n_workers)
+                                               num_workers=n_workers,
+                                               shuffle=True)
     valid_loader = torch.utils.data.DataLoader(val_data,
                                                batch_size=batch_size,
-                                               num_workers=n_workers)
+                                               num_workers=n_workers,
+                                               shuffle=True)
 
     return train_loader, valid_loader, train_data.class_to_idx
 
