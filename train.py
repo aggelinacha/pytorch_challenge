@@ -58,7 +58,8 @@ def load_data(data_dir, batch_size=20, n_workers=0):
     valid_loader = torch.utils.data.DataLoader(val_data,
                                                batch_size=batch_size,
                                                num_workers=n_workers)
-    return train_loader, valid_loader
+
+    return train_loader, valid_loader, train_data.class_to_idx
 
 
 def get_label_mapping(input_json="cat_to_name.json"):
@@ -207,7 +208,7 @@ def save_checkpoint(outfile, model, optimizer, loss, epoch,
     checkpoint = {'model': model.state_dict(),
                   'optimizer_state': optimizer.state_dict(),
                   'loss': loss,
-                  'epoch1': epoch,
+                  'epoch': epoch,
                   'class_to_idx': class_to_idx,
                   'pretrained': pretrained,
                   'hidden_1': model.classifier[0].out_features,
@@ -222,8 +223,8 @@ def load_checkpoint(filepath, train_on_gpu=False):
     @brief Load model checkpoint.
     """
     checkpoint = torch.load(filepath)
-    int2label = checkpoint['class_to_idx']
-    num_classes = len(int2label)
+    label2idx = checkpoint['class_to_idx']
+    num_classes = len(label2idx)
 
     model = build_model_vgg(num_classes,
                             pretrained=checkpoint['pretrained'],
@@ -240,8 +241,7 @@ def load_checkpoint(filepath, train_on_gpu=False):
 
 def parse_arguments():
     """!
-    @brief Parse Arguments for training a CNN with multiple datasets
-           and corresponding tasks.
+    @brief Parse Arguments for training an image classifier.
     """
     args_parser = argparse.ArgumentParser(description="Image classifier"
                                                       " training")
@@ -293,12 +293,13 @@ def main():
     """
     args = parse_arguments()
 
-    loader_tr, loader_val = load_data(args.input,
-                                      batch_size=args.batch_size,
-                                      n_workers=args.n_workers)
+    loader_tr, loader_val, class2idx = \
+        load_data(args.input,
+                  batch_size=args.batch_size,
+                  n_workers=args.n_workers)
     train_on_gpu = check_cuda()
     cat_to_name = get_label_mapping()
-    num_classes = len(cat_to_name)
+    num_classes = len(class2idx)
 
     if args.checkpoint:
         print("Loading model checkpoint...")
@@ -307,6 +308,7 @@ def main():
         loss_val_min = ckpt_dict['loss']
         epoch1 = ckpt_dict['epoch'] + 1
         args.pretrained = ckpt_dict['pretrained']
+        class2idx = ckpt_dict['class_to_idx']
     else:
         epoch1 = 0
         # Build model architecture
@@ -352,8 +354,12 @@ def main():
             print('Validation loss decreased ({:.6f} --> {:.6f}). '
                   'Saving model ...'.format(loss_val_min,
                                             loss_val))
-            save_checkpoint(args.output, model, optimizer, loss_val,
-                            epoch, cat_to_name,
+            save_checkpoint(args.output,
+                            model,
+                            optimizer,
+                            loss_val,
+                            epoch,
+                            class2idx,
                             pretrained=args.pretrained)
             loss_val_min = loss_val
 
