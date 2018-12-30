@@ -260,6 +260,8 @@ def parse_arguments():
     args_parser.add_argument('-ckpt', '--checkpoint', type=str,
                              help="Path to load the model checkpoint if"
                                   " exists.")
+    args_parser.add_argument('--gpu', action='store_true',
+                             help="Train on GPU.")
 
     return args_parser.parse_args()
 
@@ -274,7 +276,7 @@ def main():
         load_data(args.input,
                   batch_size=args.batch_size,
                   n_workers=args.n_workers)
-    train_on_gpu = check_cuda()
+    train_on_gpu = (args.gpu and check_cuda())
     num_classes = len(class2idx)
 
     if args.checkpoint:
