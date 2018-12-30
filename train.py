@@ -5,7 +5,6 @@
 """
 
 import os
-import json
 import argparse
 from collections import OrderedDict
 import numpy as np
@@ -13,6 +12,7 @@ import torch
 from torchvision import datasets, models, transforms
 from torch import nn as nn
 from torch import optim as optim
+from utils import check_cuda
 
 
 def load_data(data_dir, batch_size=20, n_workers=0):
@@ -62,31 +62,6 @@ def load_data(data_dir, batch_size=20, n_workers=0):
                                                shuffle=True)
 
     return train_loader, valid_loader, train_data.class_to_idx
-
-
-def get_label_mapping(input_json="cat_to_name.json"):
-    """!
-    @brief Read json file with label mapping (from category label to
-        category name).
-    """
-    with open(input_json, "r") as f:
-        cat_to_name = json.load(f)
-
-    return cat_to_name
-
-
-def check_cuda():
-    """!
-    @brief Check if CUDA is available.
-    """
-    train_on_gpu = torch.cuda.is_available()
-
-    if not train_on_gpu:
-        print('CUDA is not available.  Training on CPU ...')
-    else:
-        print('CUDA is available!  Training on GPU ...')
-
-    return train_on_gpu
 
 
 def build_model_vgg(n_classes, pretrained="vgg16", hidden_1=4096,
@@ -300,7 +275,6 @@ def main():
                   batch_size=args.batch_size,
                   n_workers=args.n_workers)
     train_on_gpu = check_cuda()
-    cat_to_name = get_label_mapping()
     num_classes = len(class2idx)
 
     if args.checkpoint:
