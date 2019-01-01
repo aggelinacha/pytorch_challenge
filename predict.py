@@ -179,7 +179,13 @@ def main():
     test_on_gpu = (args.gpu and check_cuda())
     cat_to_name = get_label_mapping(input_json=args.cat_to_name)
 
-    # Pre-processing
+    # Load checkpoint
+    model, ckpt_dict = load_checkpoint(args.checkpoint,
+                                       train_on_gpu=test_on_gpu)
+    idx_to_class = {idx: cat_to_name[c]
+                    for c, idx in ckpt_dict['class_to_idx'].items()}
+
+    # Pre-process image
     image = process_image(args.image_path)
     image = torch.unsqueeze(image, 0)
     if test_on_gpu:
@@ -188,12 +194,6 @@ def main():
     # Get actual label
     label = os.path.basename(os.path.dirname(args.image_path))
     label = cat_to_name[label]
-
-    # Load checkpoint
-    model, ckpt_dict = load_checkpoint(args.checkpoint,
-                                       train_on_gpu=test_on_gpu)
-    idx_to_class = {idx: cat_to_name[c]
-                    for c, idx in ckpt_dict['class_to_idx'].items()}
 
     # Predictions - top K classes
     prob_k, ind_k = predict(image, model, topk=args.top_k)
