@@ -199,7 +199,9 @@ def load_checkpoint(filepath, train_on_gpu=False):
     """!
     @brief Load model checkpoint.
     """
-    checkpoint = torch.load(filepath)
+    loc = 'cuda' if train_on_gpu else 'cpu'
+    checkpoint = torch.load(filepath, map_location=loc)
+
     label2idx = checkpoint['class_to_idx']
     num_classes = len(label2idx)
 
