@@ -26,8 +26,8 @@ def check_cuda():
     train_on_gpu = torch.cuda.is_available()
 
     if not train_on_gpu:
-        print('CUDA is not available.  Training on CPU ...')
+        print('CUDA is not available. Using CPU ...')
     else:
-        print('CUDA is available!  Training on GPU ...')
+        print('CUDA is available! Using GPU ...')
 
     return train_on_gpu
