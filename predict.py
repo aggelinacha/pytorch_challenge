@@ -112,19 +112,16 @@ def predict(image, model, topk=5):
     prob = torch.nn.Softmax(dim=1)(output).data
     prob_k, ind_k = prob.topk(topk)
 
-    prob_k = prob_k.numpy().squeeze()
-    ind_k = ind_k.numpy().squeeze()
+    prob_k = prob_k.cpu().numpy().squeeze()
+    ind_k = ind_k.cpu().numpy().squeeze()
 
     return prob_k, ind_k
 
 
-def map_classes(ind, mapping, test_on_gpu=False):
+def map_classes(ind, mapping):
     """!
-    @brief Map indeces to classes.
+    @brief Map indices to classes.
     """
-    if test_on_gpu:
-        ind = ind.cpu()
-
     classes = [mapping[idx] for idx in ind]
     return classes
 
@@ -197,9 +194,7 @@ def main():
 
     # Predictions - top K classes
     prob_k, ind_k = predict(image, model, topk=args.top_k)
-    classes_k = map_classes(ind_k,
-                            idx_to_class,
-                            test_on_gpu=test_on_gpu)
+    classes_k = map_classes(ind_k, idx_to_class)
     print("True label: '{}'".format(label))
     print("")
     print_results(classes_k, prob_k)
