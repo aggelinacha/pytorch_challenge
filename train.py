@@ -336,7 +336,8 @@ def main():
     else:
         params = model.classifier.parameters()
     optimizer = optim.SGD(params,
-                          lr=args.learning_rate)
+                          lr=args.learning_rate,
+                          momentum=0.9)
     if args.checkpoint:
         optimizer.load_state_dict(ckpt_dict['optimizer_state'])
     # Specify loss function (categorical cross-entropy)
