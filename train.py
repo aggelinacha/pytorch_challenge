@@ -331,7 +331,11 @@ def main():
         loss_val_min = np.Inf
 
     # Specify optimizer and learning rate
-    optimizer = optim.SGD(model.classifier.parameters(),
+    if args.pretrained[:6] == "resnet":
+        params = model.parameters()
+    else:
+        params = model.classifier.parameters()
+    optimizer = optim.SGD(params,
                           lr=args.learning_rate)
     if args.checkpoint:
         optimizer.load_state_dict(ckpt_dict['optimizer_state'])
