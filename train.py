@@ -64,8 +64,72 @@ def load_data(data_dir, batch_size=20, n_workers=0):
     return train_loader, valid_loader, train_data.class_to_idx
 
 
-def build_model_vgg(n_classes, pretrained="vgg16", hidden_1=4096,
-                    hidden_2=4096, drop_prob=0.5, train_on_gpu=False):
+def build_model(n_classes, pretrained="vgg16", train_on_gpu=False):
+    """!
+    @brief Build network architecture using a pretrained model.
+           (Available choices: vgg16, vgg19, densenet161 and resnet152)
+    """
+    if pretrained[:3] == "vgg":
+        model = build_model_vgg(n_classes, pretrained=pretrained)
+    elif pretrained[:8] == "densenet":
+        model = build_model_densenet(n_classes, pretrained=pretrained)
+    elif pretrained[:6] == "resnet":
+        model = build_model_resnet(n_classes, pretrained=pretrained)
+
+    # if GPU is available, move the model to GPU
+    if train_on_gpu:
+        model.cuda()
+
+    print(model)
+
+    return model
+
+
+def build_model_densenet(n_classes, pretrained="densenet161"):
+    """!
+    @brief Build network architecture using a pretrained DenseNet model.
+    """
+    if pretrained == "densenet161":
+        model = models.densenet161(pretrained=True)
+    else:
+        raise NotImplementedError("Use of {} as pretrained network for "
+                                  "feature extraction is not "
+                                  "implemented yet".format(pretrained))
+
+    # Freeze training for all features layers
+    for param in model.features.parameters():
+        param.requires_grad = False
+
+    # Last linear layer
+    n_inputs = model.classifier.in_features
+    model.classifier = nn.Linear(n_inputs, n_classes)
+
+    return model
+
+
+def build_model_resnet(n_classes, pretrained="resnet152"):
+    """!
+    @brief Build network architecture using a pretrained ResNet model.
+    """
+    if pretrained == "resnet152":
+        model = models.resnet152(pretrained=True)
+    else:
+        raise NotImplementedError("Use of {} as pretrained network for "
+                                  "feature extraction is not "
+                                  "implemented yet".format(pretrained))
+
+    # Freeze training for all features layers
+    for param in model.parameters():
+        param.requires_grad = False
+
+    # Last linear layer
+    n_inputs = model.fc.in_features
+    model.fc = nn.Linear(n_inputs, n_classes)
+
+    return model
+
+
+def build_model_vgg(n_classes, pretrained="vgg16"):
     """!
     @brief Build network architecture using a pretrained VGG model.
     """
@@ -82,23 +146,9 @@ def build_model_vgg(n_classes, pretrained="vgg16", hidden_1=4096,
     for param in model.features.parameters():
         param.requires_grad = False
 
-    n_inputs = model.classifier[0].in_features
-    classifier = nn.Sequential(OrderedDict([
-        ('0', nn.Linear(n_inputs, hidden_1)),
-        ('1', nn.ReLU(inplace=True)),
-        ('2', nn.Dropout(drop_prob)),
-        ('3', nn.Linear(hidden_1, hidden_2)),
-        ('4', nn.ReLU(inplace=True)),
-        ('5', nn.Dropout(drop_prob)),
-        ('6', nn.Linear(hidden_2, n_classes))]))
-
-    model.classifier = classifier
-
-    # if GPU is available, move the model to GPU
-    if train_on_gpu:
-        model.cuda()
-
-    print(model)
+    # Last linear layer
+    n_inputs = model.classifier[6].in_features
+    model.classifier[6] = nn.Linear(n_inputs, n_classes)
 
     return model
 
@@ -187,10 +237,7 @@ def save_checkpoint(outfile, model, optimizer, loss, epoch,
                   'loss': loss,
                   'epoch': epoch,
                   'class_to_idx': class_to_idx,
-                  'pretrained': pretrained,
-                  'hidden_1': model.classifier[0].out_features,
-                  'hidden_2': model.classifier[3].out_features,
-                  'drop_prob': model.classifier[2].p}
+                  'pretrained': pretrained}
 
     torch.save(checkpoint, outfile)
 
@@ -205,12 +252,9 @@ def load_checkpoint(filepath, train_on_gpu=False):
     label2idx = checkpoint['class_to_idx']
     num_classes = len(label2idx)
 
-    model = build_model_vgg(num_classes,
-                            pretrained=checkpoint['pretrained'],
-                            hidden_1=checkpoint['hidden_1'],
-                            hidden_2=checkpoint['hidden_2'],
-                            drop_prob=checkpoint['drop_prob'],
-                            train_on_gpu=train_on_gpu)
+    model = build_model(num_classes,
+                        pretrained=checkpoint['pretrained'],
+                        train_on_gpu=train_on_gpu)
     model.load_state_dict(checkpoint['model'])
     if train_on_gpu:
         model.cuda()
@@ -245,17 +289,6 @@ def parse_arguments():
                              default="vgg16",
                              help="Model type to use as a pretrained "
                                   "network for feature extraction.")
-    args_parser.add_argument('--hidden_1', type=int,
-                             default=4096,
-                             help="Number of hidden units for the "
-                                  "classifier's 1st linear layer.")
-    args_parser.add_argument('--hidden_2', type=int,
-                             default=4096,
-                             help="Number of hidden units for the "
-                                  "classifier's 2nd linear layer.")
-    args_parser.add_argument('--dropout', type=float,
-                             default=0.5,
-                             help="Dropout probability.")
     args_parser.add_argument('-o', '--output', type=str,
                              default='model.pt',
                              help="Path to save the model checkpoint.")
@@ -292,12 +325,9 @@ def main():
     else:
         epoch1 = 0
         # Build model architecture
-        model = build_model_vgg(num_classes,
-                                pretrained=args.pretrained,
-                                hidden_1=args.hidden_1,
-                                hidden_2=args.hidden_2,
-                                drop_prob=args.dropout,
-                                train_on_gpu=train_on_gpu)
+        model = build_model(num_classes,
+                            pretrained=args.pretrained,
+                            train_on_gpu=train_on_gpu)
         loss_val_min = np.Inf
 
     # Specify optimizer and learning rate
