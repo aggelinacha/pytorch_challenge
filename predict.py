@@ -202,7 +202,7 @@ def main():
     # Plot image and predictions
     if args.plot:
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(5, 10))
-        imshow(torch.squeeze(image),
+        imshow(torch.squeeze(image.cpu()),
                ax=ax1,
                title=label)
         plot_predictions(prob_k,

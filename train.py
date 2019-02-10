@@ -255,7 +255,7 @@ def load_checkpoint(filepath, train_on_gpu=False):
     model = build_model(num_classes,
                         pretrained=checkpoint['pretrained'],
                         train_on_gpu=train_on_gpu)
-    model.load_state_dict(checkpoint['model'])
+    model.load_state_dict(checkpoint['model'], strict=False)
     if train_on_gpu:
         model.cuda()
 
